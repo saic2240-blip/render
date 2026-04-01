@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
+import pytz
 
 app = Flask(__name__)
 CORS(app)
@@ -16,7 +17,8 @@ BLOCK_THRESHOLD = 30
 @app.route('/log', methods=['POST'])
 def log_request():
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    now = datetime.now()
+    ist = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(ist)
 
     if ip not in request_log:
         request_log[ip] = []
