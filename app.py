@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import os
@@ -42,6 +42,11 @@ def count_requests(ip):
     request_log[ip] = [t for t in request_log[ip] if now - t < timedelta(seconds=TIME_WINDOW)]
     request_log[ip].append(now)
     return len(request_log[ip])
+
+
+@app.route('/')
+def dashboard():
+    return send_file('index.html')
 
 
 @app.route('/log', methods=['POST'])
