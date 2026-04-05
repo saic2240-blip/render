@@ -3,1357 +3,1408 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DDoS Shield — Live Packet Monitor</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<title>DDoS Protection Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* ── RESET & VARIABLES ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
 :root {
-  --bg:         #080c0e;
-  --panel:      #0d1417;
-  --panel2:     #111820;
-  --border:     #1e2d35;
-  --border2:    #243340;
-  --green:      #00ff9d;
-  --green-dim:  rgba(0,255,157,0.12);
-  --green-glow: rgba(0,255,157,0.25);
-  --red:        #ff3b3b;
-  --red-dim:    rgba(255,59,59,0.12);
-  --red-glow:   rgba(255,59,59,0.3);
-  --yellow:     #ffc94d;
-  --yellow-dim: rgba(255,201,77,0.12);
-  --blue:       #3db8ff;
-  --blue-dim:   rgba(61,184,255,0.1);
-  --cyan:       #00e5ff;
-  --gray:       #4a6070;
-  --gray2:      #2a3d4a;
-  --text:       #c8dde8;
-  --text-dim:   #5a7585;
-  --mono:       'JetBrains Mono', monospace;
-  --display:    'Syne', sans-serif;
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --surface2:  #222535;
+  --border:    #2e3347;
+  --green:     #22c55e;
+  --green-bg:  rgba(34,197,94,0.1);
+  --red:       #ef4444;
+  --red-bg:    rgba(239,68,68,0.1);
+  --yellow:    #f59e0b;
+  --yellow-bg: rgba(245,158,11,0.1);
+  --blue:      #3b82f6;
+  --blue-bg:   rgba(59,130,246,0.1);
+  --purple:    #a855f7;
+  --cyan:      #06b6d4;
+  --text:      #e2e8f0;
+  --text-muted:#94a3b8;
+  --mono:      'JetBrains Mono', monospace;
+  --sans:      'Inter', sans-serif;
 }
 
-* { margin:0; padding:0; box-sizing:border-box; }
-html, body { height:100%; overflow:hidden; }
-
-body {
+html, body {
+  height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--mono);
-  font-size: 12px;
-  display: flex;
-  flex-direction: column;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── LAYOUT ── */
+.app {
+  display: grid;
+  grid-template-rows: 60px 1fr;
   height: 100vh;
+  overflow: hidden;
 }
 
-/* ── SCANLINE OVERLAY ── */
-body::before {
-  content:'';
-  position: fixed; inset:0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.04) 2px,
-    rgba(0,0,0,0.04) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-}
-
-/* ── TOP BAR ── */
-.topbar {
-  background: var(--panel);
+/* ── TOP NAVBAR ── */
+.navbar {
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: 0 16px;
-  height: 48px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-shrink: 0;
-  position: relative;
-}
-.topbar::after {
-  content:'';
-  position: absolute;
-  bottom: -1px; left:0; right:0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--green), transparent);
-  opacity: 0.4;
+  padding: 0 20px;
+  gap: 16px;
 }
 
-.logo {
-  font-family: var(--display);
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--green);
-  letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.logo-icon {
-  width: 24px; height: 24px;
-  border: 2px solid var(--green);
-  border-radius: 4px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px;
-  box-shadow: 0 0 8px var(--green-glow);
-}
-.logo span { color: var(--text-dim); font-weight: 400; }
-
-.topbar-sep { width:1px; height:24px; background:var(--border2); }
-
-.status-pill {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--text-dim);
-}
-.status-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
-  animation: blink 1.4s ease-in-out infinite;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.status-dot.red { background:var(--red); box-shadow:0 0 8px var(--red); }
-
-.topbar-clock {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
-  font-variant-numeric: tabular-nums;
-}
-
-.topbar-target {
-  font-size: 10px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
-  border: 1px solid var(--border2);
-  padding: 3px 8px;
-}
-.topbar-target b { color: var(--cyan); }
-
-/* ── TOOLBAR (like Wireshark's filter bar) ── */
-.toolbar {
-  background: var(--panel2);
-  border-bottom: 1px solid var(--border);
-  padding: 6px 16px;
+.navbar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
 }
 
-.filter-bar {
-  flex: 1;
+.brand-icon {
+  width: 32px; height: 32px;
+  background: var(--blue);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+
+.navbar-live {
   display: flex;
   align-items: center;
-  gap: 0;
-  border: 1px solid var(--border2);
-  background: var(--bg);
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.live-dot.red-dot {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.navbar-target {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  background: var(--surface2);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.navbar-target span { color: var(--cyan); }
+
+.navbar-clock {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.attack-banner {
+  background: var(--red);
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  animation: bannerPulse 0.8s ease-in-out infinite;
+  display: none;
+}
+
+.attack-banner.show { display: block; }
+
+@keyframes bannerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── MAIN BODY ── */
+.body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr;
   overflow: hidden;
 }
-.filter-label {
-  background: var(--panel);
-  padding: 5px 10px;
-  font-size: 10px;
-  color: var(--green);
-  letter-spacing: 0.08em;
-  border-right: 1px solid var(--border2);
-  white-space: nowrap;
-}
-.filter-input {
-  background: transparent; border: none; outline: none;
-  color: var(--cyan); font-family: var(--mono); font-size: 11px;
-  padding: 5px 10px; width: 100%;
-}
-.filter-input::placeholder { color: var(--gray); }
 
-.tb-btn {
-  background: var(--panel);
-  border: 1px solid var(--border2);
-  color: var(--text-dim);
-  padding: 5px 12px;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-.tb-btn:hover { border-color: var(--green); color: var(--green); }
-.tb-btn.active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
-.tb-btn.danger { border-color: var(--red); color: var(--red); background: var(--red-dim); }
-.tb-btn.danger:hover { background: rgba(255,59,59,0.2); }
-
-/* ── MAIN LAYOUT ── */
-.main {
-  flex: 1;
+/* ── LEFT SIDE ── */
+.left-panel {
   display: flex;
   flex-direction: column;
-  min-height: 0;
   overflow: hidden;
+  border-right: 1px solid var(--border);
 }
 
 /* ── STATS ROW ── */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1px;
   background: var(--border);
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.stat-cell {
-  background: var(--panel);
-  padding: 8px 14px;
+
+.stat-card {
+  background: var(--surface);
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
+
 .stat-label {
-  font-size: 9px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--text-dim);
-}
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  line-height: 1;
-}
-.stat-value.green { color: var(--green); text-shadow: 0 0 12px var(--green-glow); }
-.stat-value.red   { color: var(--red);   text-shadow: 0 0 12px var(--red-glow);   }
-.stat-value.yellow{ color: var(--yellow);}
-.stat-value.blue  { color: var(--blue);  }
-.stat-sub {
-  font-size: 9px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
-/* ── PACKET TABLE AREA ── */
-.packet-area {
+.stat-number {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+}
+
+.stat-number.green  { color: var(--green); }
+.stat-number.red    { color: var(--red); }
+.stat-number.yellow { color: var(--yellow); }
+.stat-number.blue   { color: var(--blue); }
+.stat-number.cyan   { color: var(--cyan); }
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── TOOLBAR ── */
+.toolbar {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.filter-input {
   flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.filter-input:focus { border-color: var(--blue); }
+.filter-input::placeholder { color: var(--text-muted); }
+
+.btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn:hover { border-color: var(--blue); color: var(--text); }
+.btn.btn-green { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.btn.btn-red { border-color: var(--red); color: var(--red); background: var(--red-bg); }
+.btn.btn-yellow { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-bg); }
+
+/* Auto block toggle */
+.autoblock-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.autoblock-toggle.on {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+.autoblock-toggle.off {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.toggle-switch {
+  width: 28px; height: 16px;
+  border-radius: 8px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.2s;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: white;
+  top: 2px; left: 2px;
+  transition: transform 0.2s;
+}
+
+.autoblock-toggle.on .toggle-switch { background: var(--green); }
+.autoblock-toggle.on .toggle-switch::after { transform: translateX(12px); }
+
+/* ── LOG TABLE ── */
+.log-area {
+  flex: 1;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
 }
 
-/* Column header — exact Wireshark style */
-.pkt-header {
+.table-header {
   display: grid;
-  grid-template-columns: 60px 50px 130px 130px 60px 80px 80px 80px 1fr 100px;
-  background: var(--panel2);
-  border-bottom: 2px solid var(--border2);
+  grid-template-columns: 50px 80px 140px 1fr 100px 110px;
+  background: var(--surface2);
+  border-bottom: 2px solid var(--border);
   flex-shrink: 0;
-  user-select: none;
 }
-.pkt-col {
-  padding: 5px 8px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  border-right: 1px solid var(--border);
-  cursor: pointer;
-  display: flex; align-items: center; gap: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.pkt-col:hover { color: var(--text); background: rgba(255,255,255,0.02); }
-.pkt-col.sort-asc::after  { content:'▲'; font-size:8px; color:var(--green); }
-.pkt-col.sort-desc::after { content:'▼'; font-size:8px; color:var(--green); }
 
-/* Scrollable packet list */
-.pkt-list {
+.th {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+}
+
+.table-body {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
-  min-height: 0;
 }
-.pkt-list::-webkit-scrollbar { width: 6px; }
-.pkt-list::-webkit-scrollbar-track { background: var(--bg); }
-.pkt-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-.pkt-list::-webkit-scrollbar-thumb:hover { background: var(--gray); }
 
-/* Packet row */
-.pkt-row {
+.log-row {
   display: grid;
-  grid-template-columns: 60px 50px 130px 130px 60px 80px 80px 80px 1fr 100px;
-  border-bottom: 1px solid rgba(30,45,53,0.6);
+  grid-template-columns: 50px 80px 140px 1fr 100px 110px;
+  border-bottom: 1px solid rgba(46,51,71,0.5);
   cursor: pointer;
-  transition: background 0.08s;
-  animation: rowSlide 0.2s ease both;
+  transition: background 0.1s;
+  animation: rowIn 0.2s ease;
 }
-@keyframes rowSlide {
-  from { opacity:0; transform: translateX(-6px); }
-  to   { opacity:1; transform: translateX(0); }
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-.pkt-row:hover { background: rgba(255,255,255,0.03) !important; }
-.pkt-row.selected { background: rgba(61,184,255,0.08) !important; outline: 1px solid var(--blue); outline-offset: -1px; }
 
-/* Row color coding — like Wireshark */
-.pkt-row.safe    { background: rgba(0,255,157,0.03); }
-.pkt-row.attack  { background: rgba(255,59,59,0.08); }
-.pkt-row.flagged { background: rgba(255,201,77,0.06); }
-.pkt-row.blocked { background: rgba(255,59,59,0.14); }
+.log-row:hover { background: rgba(255,255,255,0.03); }
+.log-row.selected { background: rgba(59,130,246,0.08); outline: 1px solid rgba(59,130,246,0.3); }
 
-.pkt-cell {
-  padding: 3px 8px;
-  font-size: 11px;
+.log-row.row-safe    { background: rgba(34,197,94,0.02); }
+.log-row.row-attack  { background: rgba(239,68,68,0.06); }
+.log-row.row-flagged { background: rgba(245,158,11,0.05); }
+.log-row.row-blocked { background: rgba(239,68,68,0.10); }
+.log-row.row-overload{ background: rgba(245,158,11,0.08); }
+
+.td {
+  padding: 7px 12px;
+  font-size: 12px;
   color: var(--text);
-  border-right: 1px solid rgba(30,45,53,0.4);
+  border-right: 1px solid rgba(46,51,71,0.4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: flex;
   align-items: center;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  min-height: 22px;
+  font-family: var(--mono);
 }
-.pkt-row.attack  .pkt-cell { color: #ffaaaa; }
-.pkt-row.flagged .pkt-cell { color: #ffe8aa; }
-.pkt-row.blocked .pkt-cell { color: var(--red); font-weight: 600; }
-.pkt-row.safe    .pkt-cell { color: var(--text); }
 
-.pkt-cell.num    { color: var(--text-dim); font-size: 10px; }
-.pkt-cell.time   { color: var(--cyan); font-size: 10px; }
-.pkt-cell.src    { color: var(--blue); }
-.pkt-cell.dst    { color: #a78bfa; }
-.pkt-row.attack  .pkt-cell.src { color: var(--red); }
-.pkt-row.blocked .pkt-cell.src { color: var(--red); font-weight: 700; }
-.pkt-cell.proto  { font-size: 10px; }
+.td.td-num { color: var(--text-muted); font-size: 11px; }
+.td.td-time { color: var(--cyan); font-size: 11px; }
+.td.td-ip { font-weight: 500; }
 
-/* Status badge inside table */
-.status-badge {
-  display: inline-flex; align-items: center;
-  padding: 1px 6px;
-  font-size: 9px;
+.log-row.row-attack  .td.td-ip,
+.log-row.row-blocked .td.td-ip { color: var(--red); font-weight: 700; }
+.log-row.row-flagged .td.td-ip { color: var(--yellow); }
+.log-row.row-safe    .td.td-ip { color: var(--green); }
+
+.td.td-info { font-family: var(--sans); font-size: 11px; color: var(--text-muted); }
+.log-row.row-attack  .td.td-info,
+.log-row.row-blocked .td.td-info { color: #fca5a5; }
+
+/* Status badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  border-radius: 2px;
-  white-space: nowrap;
+  letter-spacing: 0.05em;
+  font-family: var(--sans);
 }
-.sb-safe    { background: var(--green-dim);  color: var(--green);  border:1px solid rgba(0,255,157,0.3); }
-.sb-attack  { background: var(--red-dim);    color: var(--red);    border:1px solid rgba(255,59,59,0.3); }
-.sb-flagged { background: var(--yellow-dim); color: var(--yellow); border:1px solid rgba(255,201,77,0.3); }
-.sb-blocked { background: var(--red-dim);    color: var(--red);    border:1px solid var(--red); box-shadow:0 0 6px var(--red-glow); }
+
+.badge-safe     { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(34,197,94,0.3);  }
+.badge-flagged  { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+.badge-attack   { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(239,68,68,0.3);  }
+.badge-blocked  { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red); font-weight: 800; }
+.badge-overload { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow); }
 
 /* Confidence bar */
-.conf-bar {
-  display: flex; align-items: center; gap: 5px;
+.conf-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
 }
+
 .conf-track {
-  flex: 1; height: 4px;
-  background: var(--border2);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.conf-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
-.conf-val { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 30px; }
-
-/* ── BOTTOM SPLIT ── */
-.bottom-split {
-  height: 200px;
-  flex-shrink: 0;
-  display: flex;
-  border-top: 2px solid var(--border2);
-  background: var(--bg);
-}
-
-/* Packet detail panel */
-.detail-panel {
   flex: 1;
-  border-right: 1px solid var(--border);
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
   overflow: hidden;
+}
+
+.conf-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.conf-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── RIGHT PANEL ── */
+.right-panel {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
 }
-.panel-title {
-  background: var(--panel2);
-  padding: 5px 12px;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+
+.panel-section {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  display: flex; align-items: center; gap: 8px;
 }
-.panel-title::before { content:'▶'; font-size:8px; color:var(--green); }
-.detail-body {
-  flex:1; overflow-y:auto; padding:8px 12px;
-  font-size:11px; line-height: 1.7;
-}
-.detail-body::-webkit-scrollbar { width:4px; }
-.detail-body::-webkit-scrollbar-thumb { background:var(--border2); }
-.detail-key  { color: var(--text-dim); }
-.detail-val  { color: var(--cyan); }
-.detail-val.red    { color: var(--red); font-weight:600; }
-.detail-val.green  { color: var(--green); }
-.detail-val.yellow { color: var(--yellow); }
-.detail-tree-row { padding: 1px 0; }
-.detail-tree-row.indent { padding-left: 16px; }
 
-/* AI decision panel */
-.ai-panel {
-  width: 280px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-}
-.ai-body { flex:1; overflow-y:auto; padding: 10px 12px; }
-.ai-meter {
-  margin: 8px 0;
-}
-.ai-meter-label {
-  font-size: 9px; letter-spacing:0.1em; text-transform:uppercase;
-  color: var(--text-dim); margin-bottom:4px;
-  display:flex; justify-content:space-between;
-}
-.ai-meter-track {
-  height: 6px; background: var(--border2); border-radius:3px; overflow:hidden;
-}
-.ai-meter-fill {
-  height:100%; border-radius:3px;
-  transition: width 0.4s cubic-bezier(0.4,0,0.2,1), background 0.3s;
-}
-.ai-verdict {
-  margin-top: 12px;
-  padding: 10px;
-  border-radius: 3px;
-  text-align: center;
-  font-size: 13px;
+.panel-section.expand { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+.section-title {
+  padding: 10px 16px;
+  font-size: 11px;
   font-weight: 700;
+  text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-family: var(--display);
+  color: var(--text-muted);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.ai-verdict.safe    { background:var(--green-dim); color:var(--green); border:1px solid rgba(0,255,157,0.3); }
-.ai-verdict.attack  { background:var(--red-dim);   color:var(--red);   border:1px solid rgba(255,59,59,0.4); animation: alertPulse 0.6s ease; }
-.ai-verdict.flagged { background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(255,201,77,0.3);}
-.ai-verdict.idle    { background:var(--panel2); color:var(--text-dim); border:1px solid var(--border2); }
-@keyframes alertPulse { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 20px var(--red-glow)} }
 
-/* Mini chart panel */
-.chart-panel {
-  width: 320px;
-  flex-shrink: 0;
+.section-title .icon {
+  font-size: 13px;
+}
+
+/* AI Analysis section */
+.ai-section {
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
-.chart-body { flex:1; padding: 8px 12px; display:flex; flex-direction:column; gap:6px; }
-#sparkCanvas { width:100%; height:80px; }
+
+.ai-verdict-box {
+  padding: 12px 14px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid;
+}
+
+.ai-verdict-box.idle    { background: var(--surface2); color: var(--text-muted); border-color: var(--border); }
+.ai-verdict-box.safe    { background: var(--green-bg);  color: var(--green);  border-color: rgba(34,197,94,0.3); }
+.ai-verdict-box.flagged { background: var(--yellow-bg); color: var(--yellow); border-color: rgba(245,158,11,0.3); }
+.ai-verdict-box.blocked { background: var(--red-bg);    color: var(--red);    border-color: rgba(239,68,68,0.5); }
+.ai-verdict-box.blocked { animation: boxPulse 0.8s ease-in-out; }
+
+@keyframes boxPulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+}
+
+.ai-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ai-meter-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.ai-meter-label { color: var(--text-muted); font-weight: 500; }
+.ai-meter-value { color: var(--text); font-family: var(--mono); font-weight: 600; }
+
+.ai-meter-track {
+  height: 8px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.ai-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease, background 0.3s;
+}
+
+.ai-reason {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  background: var(--surface2);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.ai-reason b { color: var(--cyan); }
+
+/* Packet detail */
+.detail-section {
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.detail-section::-webkit-scrollbar { width: 3px; }
+
+.detail-key { color: var(--text-muted); }
+.detail-val { color: var(--cyan); font-family: var(--mono); }
+.detail-val.dv-red    { color: var(--red); font-weight: 600; }
+.detail-val.dv-green  { color: var(--green); font-weight: 600; }
+.detail-val.dv-yellow { color: var(--yellow); }
+
+.detail-group {
+  margin-bottom: 10px;
+}
+
+.detail-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--blue);
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Blocked IPs */
+.blocked-scroll {
+  overflow-y: auto;
+  flex: 1;
+  max-height: 200px;
+}
+
+.blocked-ip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 16px;
+  border-bottom: 1px solid rgba(46,51,71,0.5);
+  font-size: 12px;
+}
+
+.blocked-ip-row:hover { background: rgba(239,68,68,0.05); }
+.blocked-ip-addr { color: var(--red); font-family: var(--mono); font-weight: 600; }
+
+.unblock-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all 0.15s;
+}
+
+.unblock-btn:hover { border-color: var(--green); color: var(--green); }
+
+.empty-msg {
+  padding: 12px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── NOTIFICATION TOAST ── */
+.toast {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--red);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 20px rgba(239,68,68,0.2);
+  z-index: 9999;
+  transform: translateX(340px);
+  transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+.toast.show { transform: translateX(0); }
+
+.toast-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.toast-body { font-size: 12px; color: var(--text); line-height: 1.6; }
+.toast-ip   { color: var(--red); font-family: var(--mono); font-weight: 700; }
+
+.toast-close {
+  float: right;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
 
 /* ── STATUSBAR ── */
 .statusbar {
-  height: 22px; flex-shrink:0;
-  background: var(--panel);
+  height: 24px;
+  background: var(--surface);
   border-top: 1px solid var(--border);
-  display: flex; align-items:center;
-  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
   gap: 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sb-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+/* ── MINI CHART ── */
+.chart-wrap {
+  padding: 10px 16px;
+}
+
+canvas#miniChart {
+  width: 100%;
+  height: 60px;
+  display: block;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 5px;
   font-size: 10px;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
-.sb-seg { display:flex; align-items:center; gap:5px; }
-.sb-seg .dot { width:6px;height:6px;border-radius:50%; }
-
-/* ── BLOCKED IP LIST ── */
-.blocked-panel {
-  width: 220px; flex-shrink:0;
-  display:flex; flex-direction:column;
-}
-.blocked-list { flex:1; overflow-y:auto; }
-.blocked-list::-webkit-scrollbar { width:3px; }
-.blocked-list::-webkit-scrollbar-thumb { background:var(--border2); }
-.blocked-ip-row {
-  display:flex; align-items:center; justify-content:space-between;
-  padding: 4px 12px;
-  border-bottom: 1px solid rgba(30,45,53,0.5);
-  font-size: 10px;
-}
-.blocked-ip-row:hover { background:rgba(255,59,59,0.05); }
-.blocked-ip-addr { color: var(--red); font-family:var(--mono); }
-.unblock-btn {
-  background:none; border:1px solid var(--border2);
-  color:var(--text-dim); font-size:9px; padding:1px 5px;
-  cursor:pointer; font-family:var(--mono);
-  transition:all 0.15s;
-}
-.unblock-btn:hover { border-color:var(--green); color:var(--green); }
-
-/* ── ATTACK ALERT OVERLAY ── */
-.attack-alert {
-  position: fixed; top:60px; right:16px;
-  width: 320px;
-  background: var(--panel);
-  border: 1px solid var(--red);
-  box-shadow: 0 0 30px var(--red-glow);
-  padding: 12px 16px;
-  z-index: 1000;
-  transform: translateX(360px);
-  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-  border-radius: 3px;
-}
-.attack-alert.show { transform: translateX(0); }
-.alert-title {
-  font-family: var(--display);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--red);
-  display:flex; align-items:center; gap:8px;
-  margin-bottom:6px;
-}
-.alert-icon { font-size:16px; animation: shake 0.3s ease infinite; }
-@keyframes shake { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-5deg)} 75%{transform:rotate(5deg)} }
-.alert-body { font-size:11px; color:var(--text); line-height:1.6; }
-.alert-ip { color:var(--red); font-weight:700; }
-.alert-close { float:right; background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:14px; }
-
-/* ── SCROLLBAR ── */
-::-webkit-scrollbar { width:6px; height:6px; }
-::-webkit-scrollbar-track { background:var(--bg); }
-::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
 </style>
 </head>
 <body>
+<div class="app">
 
-<!-- TOP BAR -->
-<div class="topbar">
-  <div class="logo">
-    <div class="logo-icon">🛡</div>
-    DDoS SHIELD <span>/ Live Packet Monitor</span>
-  </div>
-  <div class="topbar-sep"></div>
-  <div class="status-pill">
-    <div class="status-dot" id="captureDot"></div>
-    <span id="captureStatus">CAPTURING</span>
-  </div>
-  <div class="topbar-sep"></div>
-  <div class="topbar-target">Target: <b id="targetHost">streamvibef0f1.netlify.app</b></div>
-  <div class="topbar-sep"></div>
-  <div class="status-pill" id="attackIndicator" style="display:none">
-    <div class="status-dot red"></div>
-    <span style="color:var(--red);font-weight:600">ATTACK IN PROGRESS</span>
-  </div>
-  <div class="topbar-clock" id="clock">--:--:--</div>
-</div>
-
-<!-- TOOLBAR -->
-<div class="toolbar">
-  <div class="filter-bar">
-    <div class="filter-label">DISPLAY FILTER</div>
-    <input class="filter-input" id="filterInput" placeholder="ip.addr == 192.168.x.x  or  status == attack  or  confidence > 80" oninput="applyFilter()">
-  </div>
-  <button class="tb-btn active" id="captureBtn" onclick="toggleCapture()">■ Stop</button>
-  <button class="tb-btn" onclick="clearPackets()">🗑 Clear</button>
-  <button class="tb-btn" onclick="exportLogs()">⬇ Export</button>
-  <button class="tb-btn" id="autoScrollBtn" onclick="toggleAutoScroll()" style="font-size:9px">↓ AUTO</button>
-  <button class="tb-btn danger" onclick="blockAllAttackers()">🚫 Block All</button>
-  <button class="tb-btn active" onclick="toggleAutoBlock()" id="autoBlockBtn">⚡ AUTO BLOCK: ON</button>
-</div>
-
-<!-- STATS ROW -->
-<div class="stats-row">
-  <div class="stat-cell">
-    <div class="stat-label">Packets Captured</div>
-    <div class="stat-value blue" id="sTotal">0</div>
-    <div class="stat-sub" id="sPps">0 pkt/s</div>
-  </div>
-  <div class="stat-cell">
-    <div class="stat-label">Attacks Detected</div>
-    <div class="stat-value red" id="sAttacks">0</div>
-    <div class="stat-sub" id="sAttackRate">0% of traffic</div>
-  </div>
-  <div class="stat-cell">
-    <div class="stat-label">IPs Blocked</div>
-    <div class="stat-value yellow" id="sBlocked">0</div>
-    <div class="stat-sub">auto-blocked by AI</div>
-  </div>
-  <div class="stat-cell">
-    <div class="stat-label">Benign Traffic</div>
-    <div class="stat-value green" id="sBenign">0</div>
-    <div class="stat-sub" id="sBenignRate">100% of traffic</div>
-  </div>
-  <div class="stat-cell">
-    <div class="stat-label">AI Confidence</div>
-    <div class="stat-value" id="sConfidence" style="font-size:16px;color:var(--cyan)">—</div>
-    <div class="stat-sub" id="sModel">Hybrid Ensemble</div>
-  </div>
-  <div class="stat-cell">
-    <div class="stat-label">Req / Minute</div>
-    <div class="stat-value" id="sReqMin" style="font-size:16px;color:var(--text)">0</div>
-    <div class="stat-sub" id="sThreshold">block threshold: 30 req/min</div>
-  </div>
-</div>
-
-<!-- MAIN AREA -->
-<div class="main">
-  <div class="packet-area">
-
-    <!-- Column Headers -->
-    <div class="pkt-header">
-      <div class="pkt-col">#</div>
-      <div class="pkt-col">Time</div>
-      <div class="pkt-col">Source IP</div>
-      <div class="pkt-col">Destination</div>
-      <div class="pkt-col">Proto</div>
-      <div class="pkt-col">Method</div>
-      <div class="pkt-col">Packets</div>
-      <div class="pkt-col">Rate/s</div>
-      <div class="pkt-col">Info</div>
-      <div class="pkt-col">Status</div>
+  <!-- ── NAVBAR ── -->
+  <div class="navbar">
+    <div class="navbar-brand">
+      <div class="brand-icon">🛡</div>
+      DDoS Protection Dashboard
     </div>
-
-    <!-- Packet Rows -->
-    <div class="pkt-list" id="pktList"></div>
+    <div class="navbar-live">
+      <div class="live-dot" id="liveDot"></div>
+      <span id="liveStatus">MONITORING</span>
+    </div>
+    <div class="navbar-target">
+      Target: <span id="targetHost">streamvibef0f1.netlify.app</span>
+    </div>
+    <div class="attack-banner" id="attackBanner">⚠ ATTACK IN PROGRESS</div>
+    <div class="navbar-clock" id="clock">--:--:--</div>
   </div>
 
-  <!-- BOTTOM SPLIT -->
-  <div class="bottom-split">
+  <!-- ── BODY ── -->
+  <div class="body">
 
-    <!-- Packet Detail -->
-    <div class="detail-panel">
-      <div class="panel-title">Packet / Request Detail</div>
-      <div class="detail-body" id="detailBody">
-        <div style="color:var(--text-dim);font-style:italic;font-size:11px">
-          Select a packet row to inspect details...
+    <!-- ── LEFT PANEL ── -->
+    <div class="left-panel">
+
+      <!-- Stats Row -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Requests</div>
+          <div class="stat-number blue" id="sTotal">0</div>
+          <div class="stat-sub" id="sPps">0 req/s</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Attacks Detected</div>
+          <div class="stat-number red" id="sAttacks">0</div>
+          <div class="stat-sub" id="sAttackRate">0% of traffic</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">IPs Blocked</div>
+          <div class="stat-number yellow" id="sBlocked">0</div>
+          <div class="stat-sub">auto-blocked by AI</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Safe Traffic</div>
+          <div class="stat-number green" id="sBenign">0</div>
+          <div class="stat-sub" id="sBenignRate">100% of traffic</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Req / Minute</div>
+          <div class="stat-number cyan" id="sReqMin">0</div>
+          <div class="stat-sub" id="sModel">ML: Random Forest</div>
         </div>
       </div>
-    </div>
 
-    <!-- AI Decision Panel -->
-    <div class="ai-panel">
-      <div class="panel-title">AI Engine — Decision</div>
-      <div class="ai-body" id="aiBody">
-        <div class="ai-meter">
-          <div class="ai-meter-label"><span>ATTACK PROBABILITY</span><span id="aiAttackProb">0%</span></div>
-          <div class="ai-meter-track"><div class="ai-meter-fill" id="aiAttackFill" style="width:0%;background:var(--red)"></div></div>
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <span class="toolbar-label">Filter:</span>
+        <input class="filter-input" id="filterInput" placeholder="Type IP, status (attack/safe/blocked), or keyword..." oninput="applyFilter()">
+        <button class="btn" onclick="clearLogs()">🗑 Clear</button>
+        <button class="btn" onclick="exportLogs()">⬇ Export</button>
+        <button class="btn" id="autoScrollBtn" onclick="toggleAutoScroll()">↓ Auto</button>
+        <button class="btn btn-red" onclick="blockAllAttackers()">🚫 Block All</button>
+        <div class="autoblock-toggle on" id="autoBlockToggle" onclick="toggleAutoBlock()">
+          <div class="toggle-switch"></div>
+          <span id="autoBlockLabel">AUTO BLOCK: ON</span>
         </div>
-        <div class="ai-meter">
-          <div class="ai-meter-label"><span>BENIGN CONFIDENCE</span><span id="aiBenignProb">100%</span></div>
-          <div class="ai-meter-track"><div class="ai-meter-fill" id="aiBenignFill" style="width:100%;background:var(--green)"></div></div>
+        <button class="btn" onclick="resetAll()" title="Reset all data">↺ Reset</button>
+      </div>
+
+      <!-- Log Table -->
+      <div class="log-area">
+        <div class="table-header">
+          <div class="th">#</div>
+          <div class="th">Time</div>
+          <div class="th">Source IP</div>
+          <div class="th">Info / Reason</div>
+          <div class="th">Confidence</div>
+          <div class="th">Status</div>
         </div>
-        <div class="ai-meter">
-          <div class="ai-meter-label"><span>RATE SCORE</span><span id="aiRateScore">0%</span></div>
-          <div class="ai-meter-track"><div class="ai-meter-fill" id="aiRateFill" style="width:0%;background:var(--yellow)"></div></div>
-        </div>
-        <div class="ai-verdict idle" id="aiVerdict">
-          AWAITING TRAFFIC
-        </div>
-        <div style="margin-top:10px;font-size:10px;color:var(--text-dim);line-height:1.6" id="aiReason">
-          Model: Hybrid Ensemble (RF + DT + XGBoost)<br>
-          Threshold: 0.85 confidence to auto-block
+        <div class="table-body" id="tableBody">
+          <div style="padding: 20px; color: var(--text-muted); font-size: 13px; text-align: center; margin-top: 40px;">
+            ⏳ Waiting for traffic... Open the StreamVibe website to see requests appear here.
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Spark Chart Panel -->
-    <div class="chart-panel">
-      <div class="panel-title">Traffic Rate — Live</div>
-      <div class="chart-body">
-        <canvas id="sparkCanvas"></canvas>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:2px">
-          <span>60s ago</span><span>30s ago</span><span>now</span>
+      <!-- Statusbar -->
+      <div class="statusbar">
+        <div class="sb-item">
+          <div class="sb-dot" style="background: var(--green)"></div>
+          <span id="sbApi">Connecting to backend...</span>
         </div>
-        <div style="display:flex;gap:12px;font-size:9px;margin-top:4px">
-          <span style="color:var(--green)">● benign</span>
-          <span style="color:var(--red)">● attack</span>
+        <div class="sb-item">
+          <div class="sb-dot" style="background: var(--blue)"></div>
+          <span id="sbFilter">No filter</span>
+        </div>
+        <div class="sb-item" style="margin-left: auto">
+          <span id="sbCount">Rows: 0</span>
+        </div>
+        <div class="sb-item">
+          <span id="sbElapsed">Elapsed: 00:00</span>
         </div>
       </div>
+
     </div>
 
-    <!-- Blocked IPs -->
-    <div class="blocked-panel">
-      <div class="panel-title">Blocked IPs (<span id="blockedCount">0</span>)</div>
-      <div class="blocked-list" id="blockedList">
-        <div style="color:var(--text-dim);font-size:10px;padding:8px 12px;font-style:italic">No IPs blocked yet</div>
+    <!-- ── RIGHT PANEL ── -->
+    <div class="right-panel">
+
+      <!-- AI Analysis -->
+      <div class="panel-section">
+        <div class="section-title"><span class="icon">🤖</span> AI Detection Engine</div>
+        <div class="ai-section">
+          <div class="ai-verdict-box idle" id="aiVerdict">AWAITING TRAFFIC</div>
+
+          <div class="ai-meter">
+            <div class="ai-meter-header">
+              <span class="ai-meter-label">Attack Probability</span>
+              <span class="ai-meter-value" id="aiAttackPct">0%</span>
+            </div>
+            <div class="ai-meter-track">
+              <div class="ai-meter-fill" id="aiAttackFill" style="width:0%; background: var(--red)"></div>
+            </div>
+          </div>
+
+          <div class="ai-meter">
+            <div class="ai-meter-header">
+              <span class="ai-meter-label">Safe (Benign) Score</span>
+              <span class="ai-meter-value" id="aiBenignPct">100%</span>
+            </div>
+            <div class="ai-meter-track">
+              <div class="ai-meter-fill" id="aiBenignFill" style="width:100%; background: var(--green)"></div>
+            </div>
+          </div>
+
+          <div class="ai-reason" id="aiReason">
+            Model: <b>Random Forest</b> (trained on CICIDS dataset)<br>
+            Detection: Threshold 20 req/min → flag | 30 req/min → block
+          </div>
+        </div>
       </div>
-    </div>
 
+      <!-- Mini Chart -->
+      <div class="panel-section">
+        <div class="section-title"><span class="icon">📈</span> Live Traffic Chart</div>
+        <div class="chart-wrap">
+          <canvas id="miniChart"></canvas>
+          <div class="chart-legend">
+            <span>🟢 Safe traffic</span>
+            <span>🔴 Attack traffic</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Request Detail -->
+      <div class="panel-section" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+        <div class="section-title"><span class="icon">🔍</span> Request Detail</div>
+        <div class="detail-section" id="detailSection">
+          <div style="color: var(--text-muted); font-size: 12px; font-style: italic;">
+            Click any row to see full request details...
+          </div>
+        </div>
+      </div>
+
+      <!-- Blocked IPs -->
+      <div class="panel-section" style="flex-shrink: 0;">
+        <div class="section-title">
+          <span class="icon">🚫</span> Blocked IPs (<span id="blockedCount">0</span>)
+        </div>
+        <div class="blocked-scroll" id="blockedList">
+          <div class="empty-msg">No IPs blocked yet</div>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
-<!-- STATUSBAR -->
-<div class="statusbar">
-  <div class="sb-seg"><div class="dot" style="background:var(--green)"></div><span id="sbCapture">Connecting to API...</span></div>
-  <div class="sb-seg"><div class="dot" style="background:var(--blue)"></div><span id="sbFilter">No filter applied</span></div>
-  <div class="sb-seg"><div class="dot" style="background:var(--yellow)"></div><span id="sbSelected">No packet selected</span></div>
-  <div class="sb-seg" style="margin-left:auto"><span id="sbCount">Packets: 0</span></div>
-  <div class="sb-seg"><span id="sbElapsed">Elapsed: 00:00:00</span></div>
-</div>
-
-<!-- ATTACK ALERT -->
-<div class="attack-alert" id="attackAlert">
-  <button class="alert-close" onclick="dismissAlert()">✕</button>
-  <div class="alert-title">
-    <span class="alert-icon">⚠</span>
-    DDOS ATTACK DETECTED
-  </div>
-  <div class="alert-body" id="alertBody">
-    Attacker IP: <span class="alert-ip" id="alertIp">—</span><br>
-    Confidence: <span id="alertConf">—</span><br>
-    Action: <b style="color:var(--red)">AUTO-BLOCKED</b> by AI
+<!-- ── TOAST NOTIFICATION ── -->
+<div class="toast" id="toast">
+  <button class="toast-close" onclick="hideToast()">✕</button>
+  <div class="toast-title">⚠ DDoS ATTACK DETECTED</div>
+  <div class="toast-body">
+    Attacker IP: <span class="toast-ip" id="toastIp">—</span><br>
+    Confidence: <span id="toastConf">—</span><br>
+    Action: <b style="color: var(--red)" id="toastAction">AUTO-BLOCKED</b>
   </div>
 </div>
 
 <script>
-// ═══════════════════════════════════════════
-//  CONFIG
-// ═══════════════════════════════════════════
-const API_BASE = 'https://render-21yz.onrender.com';
-const POLL_INTERVAL = 2000;   // ms — fetch new data every 2s
-const MAX_ROWS = 500;          // max rows in table before trimming
-const RATE_LIMIT = 30;         // must match BLOCK_THRESHOLD in app.py
+// ═══════════════════════════════════════════════
+//  CONFIG — change API_BASE if your Render URL changes
+// ═══════════════════════════════════════════════
+const API_BASE     = 'https://render-21yz.onrender.com';
+const POLL_MS      = 2000;   // poll every 2 seconds
+const MAX_ROWS     = 300;    // max rows before trimming
+const BLOCK_THRESH = 30;
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  STATE
-// ═══════════════════════════════════════════
-let packets = [];
-let packetNum = 0;
-let autoScroll = true;
-let capturing = true;
-let selectedPkt = null;
-let filterText = '';
-let startTime = Date.now();
-let pollTimer = null;
-let lastStats = null;
-let sparkData = { benign: new Array(60).fill(0), attack: new Array(60).fill(0) };
-let sparkTimer = null;
-let prevTotal = 0;
-let ppsBuffer = [];
-let blockedIPs = new Set();
-let alertDismissTimer = null;
+// ═══════════════════════════════════════════════
+let rowNum        = 0;
+let allRows       = [];
+let filterText    = '';
+let autoScroll    = true;
+let autoBlock     = true;
+let startTime     = Date.now();
+let pollTimer     = null;
+let lastTotal     = 0;
+let lastStats     = null;
+let seenKeys      = new Set();
+let blockedSet    = new Set();
+let toastTimer    = null;
+let sparkData     = { safe: new Array(40).fill(0), attack: new Array(40).fill(0) };
+let prevBenign    = 0;
+let prevAttack    = 0;
 
-// ═══════════════════════════════════════════
-//  CLOCK & ELAPSED
-// ═══════════════════════════════════════════
-function updateClock() {
+// ═══════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════
+function tick() {
   const now = new Date();
-  document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB', {hour12:false});
-  const elapsed = Math.floor((Date.now() - startTime) / 1000);
-  const h = String(Math.floor(elapsed/3600)).padStart(2,'0');
-  const m = String(Math.floor((elapsed%3600)/60)).padStart(2,'0');
-  const s = String(elapsed%60).padStart(2,'0');
-  document.getElementById('sbElapsed').textContent = `Elapsed: ${h}:${m}:${s}`;
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-GB', { hour12: false });
+  const sec = Math.floor((Date.now() - startTime) / 1000);
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  document.getElementById('sbElapsed').textContent = `Elapsed: ${m}:${s}`;
 }
-setInterval(updateClock, 1000); updateClock();
+setInterval(tick, 1000);
+tick();
 
-// ═══════════════════════════════════════════
-//  SPARK CHART
-// ═══════════════════════════════════════════
-const sparkCanvas = document.getElementById('sparkCanvas');
-const sparkCtx = sparkCanvas.getContext('2d');
+// ═══════════════════════════════════════════════
+//  MINI CHART
+// ═══════════════════════════════════════════════
+const chartCanvas = document.getElementById('miniChart');
+const chartCtx    = chartCanvas.getContext('2d');
 
-function drawSpark() {
-  const W = sparkCanvas.offsetWidth;
-  const H = sparkCanvas.offsetHeight;
-  sparkCanvas.width = W; sparkCanvas.height = H;
+function drawChart() {
+  const W = chartCanvas.offsetWidth;
+  const H = 60;
+  chartCanvas.width  = W;
+  chartCanvas.height = H;
 
-  const maxVal = Math.max(10, ...sparkData.benign, ...sparkData.attack);
-  sparkCtx.clearRect(0,0,W,H);
+  const maxV = Math.max(5, ...sparkData.safe, ...sparkData.attack);
+  chartCtx.clearRect(0, 0, W, H);
 
-  // Grid lines
-  sparkCtx.strokeStyle = 'rgba(30,45,53,0.8)';
-  sparkCtx.lineWidth = 1;
-  for(let i=0;i<=4;i++) {
-    const y = H * i/4;
-    sparkCtx.beginPath(); sparkCtx.moveTo(0,y); sparkCtx.lineTo(W,y); sparkCtx.stroke();
-  }
+  // Grid
+  chartCtx.strokeStyle = 'rgba(46,51,71,0.6)';
+  chartCtx.lineWidth   = 1;
+  [0.25, 0.5, 0.75, 1].forEach(y => {
+    chartCtx.beginPath();
+    chartCtx.moveTo(0, H * y);
+    chartCtx.lineTo(W, H * y);
+    chartCtx.stroke();
+  });
 
-  function drawLine(data, color, fill) {
-    const pts = data.map((v,i) => [i*(W/(data.length-1)), H - (v/maxVal)*H*0.9]);
-    // Fill
-    sparkCtx.beginPath();
-    sparkCtx.moveTo(pts[0][0], H);
-    pts.forEach(p => sparkCtx.lineTo(p[0], p[1]));
-    sparkCtx.lineTo(pts[pts.length-1][0], H);
-    sparkCtx.closePath();
-    const grad = sparkCtx.createLinearGradient(0,0,0,H);
-    grad.addColorStop(0, fill);
+  function line(data, color, fillColor) {
+    const pts = data.map((v, i) => [
+      (i / (data.length - 1)) * W,
+      H - (v / maxV) * H * 0.88
+    ]);
+    // Fill under line
+    chartCtx.beginPath();
+    chartCtx.moveTo(pts[0][0], H);
+    pts.forEach(p => chartCtx.lineTo(p[0], p[1]));
+    chartCtx.lineTo(pts[pts.length - 1][0], H);
+    chartCtx.closePath();
+    const grad = chartCtx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, fillColor);
     grad.addColorStop(1, 'transparent');
-    sparkCtx.fillStyle = grad; sparkCtx.fill();
+    chartCtx.fillStyle = grad;
+    chartCtx.fill();
     // Line
-    sparkCtx.beginPath();
-    pts.forEach((p,i) => i===0 ? sparkCtx.moveTo(p[0],p[1]) : sparkCtx.lineTo(p[0],p[1]));
-    sparkCtx.strokeStyle = color; sparkCtx.lineWidth = 1.5;
-    sparkCtx.stroke();
+    chartCtx.beginPath();
+    pts.forEach((p, i) => i === 0 ? chartCtx.moveTo(p[0], p[1]) : chartCtx.lineTo(p[0], p[1]));
+    chartCtx.strokeStyle = color;
+    chartCtx.lineWidth   = 1.5;
+    chartCtx.stroke();
   }
 
-  drawLine(sparkData.benign, 'rgba(0,255,157,0.8)', 'rgba(0,255,157,0.08)');
-  drawLine(sparkData.attack,  'rgba(255,59,59,0.9)',  'rgba(255,59,59,0.12)');
+  line(sparkData.safe,   'rgba(34,197,94,0.9)',  'rgba(34,197,94,0.12)');
+  line(sparkData.attack, 'rgba(239,68,68,0.9)',  'rgba(239,68,68,0.15)');
 }
 
-sparkTimer = setInterval(() => {
-  if (!capturing) return;
-  sparkData.benign.shift(); sparkData.attack.shift();
-  const stats = lastStats;
-  if (stats) {
-    const newBenign = Math.max(0, (stats.benign_requests || 0) - (prevBenignTotal||0));
-    const newAttack = Math.max(0, (stats.attacks_detected||0) - (prevAttackTotal||0));
-    sparkData.benign.push(newBenign);
-    sparkData.attack.push(newAttack);
-    prevBenignTotal = stats.benign_requests||0;
-    prevAttackTotal = stats.attacks_detected||0;
-  } else {
-    sparkData.benign.push(0); sparkData.attack.push(0);
-  }
-  drawSpark();
+setInterval(() => {
+  if (!lastStats) return;
+  const nb = Math.max(0, (lastStats.benign_requests || 0) - prevBenign);
+  const na = Math.max(0, (lastStats.attacks_detected || 0) - prevAttack);
+  prevBenign = lastStats.benign_requests || 0;
+  prevAttack = lastStats.attacks_detected || 0;
+  sparkData.safe.shift();   sparkData.safe.push(nb);
+  sparkData.attack.shift(); sparkData.attack.push(na);
+  drawChart();
 }, 1000);
-let prevBenignTotal=0, prevAttackTotal=0;
-drawSpark();
-window.addEventListener('resize', drawSpark);
 
-// ═══════════════════════════════════════════
-//  FETCH STATS FROM FLASK API
-// ═══════════════════════════════════════════
+drawChart();
+window.addEventListener('resize', drawChart);
+
+// ═══════════════════════════════════════════════
+//  FETCH STATS
+// ═══════════════════════════════════════════════
 async function fetchStats() {
-  if (!capturing) return;
   try {
-    const r = await fetch(`${API_BASE}/api/stats`);
-    if (!r.ok) throw new Error('API offline');
-    const data = await r.json();
-    lastStats = data;
+    const res  = await fetch(`${API_BASE}/api/stats`);
+    if (!res.ok) throw new Error('API offline');
+    const data = await res.json();
+    lastStats  = data;
 
-    // Update stats row
-    const total = data.total_requests || 0;
-    const attacks = data.attacks_detected || 0;
+    const total   = data.total_requests    || 0;
+    const attacks = data.attacks_detected  || 0;
     const blocked = data.blocked_ips_count || 0;
-    const benign = data.benign_requests || 0;
+    const benign  = data.benign_requests   || 0;
+    const pps     = Math.round((total - lastTotal) / (POLL_MS / 1000));
+    lastTotal     = total;
 
-    document.getElementById('sTotal').textContent = total.toLocaleString();
-    document.getElementById('sAttacks').textContent = attacks.toLocaleString();
-    document.getElementById('sBlocked').textContent = blocked.toLocaleString();
-    document.getElementById('sBenign').textContent = benign.toLocaleString();
+    // Update stat cards
+    document.getElementById('sTotal').textContent    = total.toLocaleString();
+    document.getElementById('sAttacks').textContent  = attacks.toLocaleString();
+    document.getElementById('sBlocked').textContent  = blocked.toLocaleString();
+    document.getElementById('sBenign').textContent   = benign.toLocaleString();
+    document.getElementById('sPps').textContent      = `${pps} req/s`;
+    document.getElementById('sReqMin').textContent   = (pps * 60).toLocaleString();
+    document.getElementById('sReqMin').style.color   = pps * 60 > BLOCK_THRESH ? 'var(--red)' : 'var(--cyan)';
 
-    const pps = Math.round((total - prevTotal) / (POLL_INTERVAL/1000));
-    prevTotal = total;
-    document.getElementById('sPps').textContent = pps + ' pkt/s';
+    const atkPct = total > 0 ? ((attacks / total) * 100).toFixed(1) : '0';
+    document.getElementById('sAttackRate').textContent  = `${atkPct}% of traffic`;
+    document.getElementById('sBenignRate').textContent  = `${(100 - parseFloat(atkPct)).toFixed(1)}% of traffic`;
 
-    const attackRate = total > 0 ? ((attacks/total)*100).toFixed(1) : '0';
-    document.getElementById('sAttackRate').textContent = `${attackRate}% of traffic`;
-    document.getElementById('sBenignRate').textContent = `${(100-parseFloat(attackRate)).toFixed(1)}% of traffic`;
-
-    const reqMin = Math.round(pps * 60);
-    document.getElementById('sReqMin').textContent = reqMin.toLocaleString();
-    document.getElementById('sReqMin').style.color = reqMin > RATE_LIMIT ? 'var(--red)' : 'var(--text)';
-
-    // Process new incidents into packet rows
-    if (data.recent_incidents) {
-      processIncidents(data.recent_incidents, total, pps);
-    }
-
-    // Update blocked IPs
-    await fetchBlockedIPs();
-
-    // Attack indicator
-    const underAttack = attacks > 0 && pps > 5;
-    document.getElementById('attackIndicator').style.display = underAttack ? 'flex' : 'none';
-
-    document.getElementById('sbCapture').textContent = `API: render-21yz.onrender.com — Live`;
-
-    // Sync auto-block state from server
-    if (typeof data.auto_block === 'boolean' && data.auto_block !== autoBlock) {
-      autoBlock = data.auto_block;
-      const btn = document.getElementById('autoBlockBtn');
-      btn.textContent = `⚡ AUTO BLOCK: ${autoBlock ? 'ON' : 'OFF'}`;
-      if (autoBlock) { btn.classList.add('active'); btn.classList.remove('danger'); }
-      else           { btn.classList.remove('active'); btn.classList.add('danger'); }
-    }
-
-    // Show ML vs fallback in model label
     if (data.ml_active !== undefined) {
-      document.getElementById('sModel').textContent = data.ml_active ? 'Random Forest ML' : 'Threshold Fallback';
+      document.getElementById('sModel').textContent =
+        data.ml_active ? 'ML: Random Forest ✓' : 'ML: Threshold fallback';
     }
 
-  } catch(e) {
-    document.getElementById('sbCapture').textContent = `⚠ API offline — start app.py`;
-    // Inject simulated demo traffic when API is offline
-    injectDemoPacket();
+    // Render new incidents
+    if (data.recent_incidents) {
+      data.recent_incidents.forEach(processIncident);
+    }
+
+    // Blocked IPs
+    fetchBlocked();
+
+    // Attack banner
+    const underAttack = attacks > 0 && pps > 3;
+    document.getElementById('attackBanner').classList.toggle('show', underAttack);
+    document.getElementById('liveDot').classList.toggle('red-dot', underAttack);
+    document.getElementById('liveStatus').textContent = underAttack ? 'UNDER ATTACK' : 'MONITORING';
+
+    document.getElementById('sbApi').textContent =
+      `Backend: render-21yz.onrender.com — Live`;
+
+    // Sync autoBlock state
+    if (typeof data.auto_block === 'boolean') {
+      setAutoBlockUI(data.auto_block);
+      autoBlock = data.auto_block;
+    }
+
+  } catch (e) {
+    document.getElementById('sbApi').textContent = '⚠ Backend offline — run app.py';
   }
 }
 
-// ═══════════════════════════════════════════
-//  PROCESS INCIDENTS INTO PACKET ROWS
-// ═══════════════════════════════════════════
-let knownTimestamps = new Set();
+// ═══════════════════════════════════════════════
+//  PROCESS INCIDENT → ADD ROW
+// ═══════════════════════════════════════════════
+function processIncident(inc) {
+  const key = `${inc.timestamp}-${inc.ip}-${inc.action}`;
+  if (seenKeys.has(key)) return;
+  seenKeys.add(key);
 
-function processIncidents(incidents, total, pps) {
-  incidents.forEach(inc => {
-    const key = `${inc.timestamp}-${inc.ip}-${inc.label}`;
-    if (knownTimestamps.has(key)) return;
-    knownTimestamps.add(key);
+  const action = inc.action || 'ALLOWED';
+  const label  = inc.label  || 'BENIGN';
+  const conf   = parseFloat(inc.confidence) || 0;
 
-    const conf = parseFloat(inc.confidence)||0;
-    const label = inc.label;
-    const action = inc.action;
+  let rowClass = 'row-safe';
+  if (action === 'BLOCKED')        rowClass = 'row-blocked';
+  else if (action === 'OVERLOAD')  rowClass = 'row-overload';
+  else if (label === 'DDoS')       rowClass = 'row-attack';
+  else if (action === 'FLAGGED')   rowClass = 'row-flagged';
 
-    let status = 'safe';
-    if (action === 'BLOCKED') status = 'blocked';
-    else if (label === 'DDoS') status = action === 'FLAGGED' ? 'flagged' : 'attack';
+  rowNum++;
+  const pkt = {
+    num: rowNum, rowClass,
+    time: inc.timestamp ? inc.timestamp.split(' ')[1] : timeNow(),
+    ip: inc.ip, action, label, conf,
+    reason: inc.reason || '',
+    raw: inc
+  };
 
-    addPacketRow({
-      time:       inc.timestamp ? inc.timestamp.split(' ')[1] : timeNow(),
-      src:        inc.ip,
-      dst:        'streamvibef0f1.netlify.app',
-      proto:      'HTTP',
-      method:     'GET',
-      packets:    pps > 0 ? pps : '—',
-      rate:       pps,
-      info:       `${inc.reason} — ${label}`,
-      confidence: conf,
-      status:     status,
-      action:     action,
-      raw:        inc
-    });
+  allRows.push(pkt);
+  if (allRows.length > MAX_ROWS) allRows.shift();
 
-    // AI panel update for latest
-    updateAIPanel(conf, status, inc.reason, pps);
-
-    // Fire alert for new blocked IPs
-    if (action === 'BLOCKED' && !blockedIPs.has(inc.ip)) {
-      blockedIPs.add(inc.ip);
-      showAttackAlert(inc.ip, conf);
-    }
-  });
-}
-
-// ═══════════════════════════════════════════
-//  DEMO SIMULATION (when API is offline)
-// ═══════════════════════════════════════════
-let demoCounter = 0;
-const demoIPs = ['203.45.12.88','185.220.101.47','91.108.4.200','172.16.0.55','10.0.0.42'];
-const normalIPs = ['192.168.1.10','192.168.1.15','192.168.1.23','10.10.10.5'];
-
-function injectDemoPacket() {
-  demoCounter++;
-  const isAttack = demoCounter > 15 && (demoCounter % 3 !== 0);
-  const ip = isAttack
-    ? demoIPs[Math.floor(Math.random()*demoIPs.length)]
-    : normalIPs[Math.floor(Math.random()*normalIPs.length)];
-
-  const conf = isAttack ? 85 + Math.random()*14 : 2 + Math.random()*20;
-  const rate = isAttack ? 80 + Math.random()*200 : 1 + Math.random()*5;
-  let status = isAttack ? (conf > 85 ? 'blocked' : 'flagged') : 'safe';
-
-  addPacketRow({
-    time:       timeNow(),
-    src:        ip,
-    dst:        'streamvibef0f1.netlify.app',
-    proto:      'HTTP',
-    method:     isAttack ? 'GET' : ['GET','POST','GET'][Math.floor(Math.random()*3)],
-    packets:    Math.round(rate),
-    rate:       Math.round(rate),
-    info:       isAttack
-                  ? `[DDoS] SYN Flood — ${Math.round(rate)} req/s — Rate limit exceeded`
-                  : `[Benign] Normal browse — User-Agent: Chrome/120`,
-    confidence: conf,
-    status:     status,
-    action:     status === 'blocked' ? 'BLOCKED' : status === 'flagged' ? 'FLAGGED' : 'ALLOWED',
-    raw:        null
-  });
-
-  // Update demo stats
-  const t = parseInt(document.getElementById('sTotal').textContent.replace(/,/g,''))||0;
-  document.getElementById('sTotal').textContent = (t+1).toLocaleString();
-  if (isAttack) {
-    const a = parseInt(document.getElementById('sAttacks').textContent)||0;
-    document.getElementById('sAttacks').textContent = (a+1).toLocaleString();
-    if (status==='blocked' && !blockedIPs.has(ip)) {
-      blockedIPs.add(ip);
-      const b = parseInt(document.getElementById('sBlocked').textContent)||0;
-      document.getElementById('sBlocked').textContent = (b+1).toLocaleString();
-      showAttackAlert(ip, conf.toFixed(1));
-      updateBlockedPanel();
-    }
-  } else {
-    const bn = parseInt(document.getElementById('sBenign').textContent)||0;
-    document.getElementById('sBenign').textContent = (bn+1).toLocaleString();
+  // Toast alert for new blocks
+  if ((action === 'BLOCKED' || action === 'OVERLOAD') && !blockedSet.has(inc.ip)) {
+    blockedSet.add(inc.ip);
+    if (action === 'BLOCKED') showToast(inc.ip, conf, 'AUTO-BLOCKED by AI');
   }
-  document.getElementById('sReqMin').textContent = Math.round(rate*60).toLocaleString();
-  document.getElementById('sReqMin').style.color = isAttack ? 'var(--red)' : 'var(--text)';
-  document.getElementById('sConfidence').textContent = conf.toFixed(1)+'%';
-  document.getElementById('sConfidence').style.color = status==='safe' ? 'var(--green)' : status==='blocked' ? 'var(--red)' : 'var(--yellow)';
-  updateAIPanel(conf, status, isAttack ? 'Rate limit + ML model' : 'Pattern: benign', rate);
+
+  renderRow(pkt);
+  updateAI(conf, rowClass, inc.reason || '—');
 }
 
-// ═══════════════════════════════════════════
-//  ADD PACKET ROW
-// ═══════════════════════════════════════════
-function addPacketRow(pkt) {
-  packetNum++;
-  pkt.num = packetNum;
-  packets.push(pkt);
-  if (packets.length > MAX_ROWS) packets.shift();
+function renderRow(pkt) {
+  if (filterText && !rowMatches(pkt, filterText)) return;
 
-  const fText = filterText.toLowerCase().trim();
-  if (fText && !matchesFilter(pkt, fText)) return;
+  const tbody = document.getElementById('tableBody');
 
-  const list = document.getElementById('pktList');
+  // Clear empty message
+  const empty = tbody.querySelector('[data-empty]');
+  if (empty) empty.remove();
 
-  // Trim DOM rows if too many
-  while (list.children.length >= MAX_ROWS) list.removeChild(list.firstChild);
+  // Trim
+  while (tbody.children.length >= MAX_ROWS) tbody.removeChild(tbody.firstChild);
 
-  const conf = parseFloat(pkt.confidence)||0;
-  const confColor = pkt.status === 'safe'
-    ? 'var(--green)' : pkt.status === 'blocked'
-    ? 'var(--red)' : 'var(--yellow)';
+  const confColor = pkt.rowClass === 'row-safe' ? 'var(--green)'
+    : pkt.rowClass === 'row-blocked' ? 'var(--red)' : 'var(--yellow)';
+
+  const badgeClass = pkt.action === 'BLOCKED' ? 'badge-blocked'
+    : pkt.action === 'OVERLOAD'  ? 'badge-overload'
+    : pkt.action === 'FLAGGED'   ? 'badge-flagged'
+    : pkt.label  === 'DDoS'      ? 'badge-attack'
+    : 'badge-safe';
+
+  const badgeText = pkt.action === 'OVERLOAD' ? 'OVERLOAD' : pkt.action;
 
   const row = document.createElement('div');
-  row.className = `pkt-row ${pkt.status}`;
-  row.dataset.pktIdx = packets.length - 1;
+  row.className = `log-row ${pkt.rowClass}`;
   row.innerHTML = `
-    <div class="pkt-cell num">${pkt.num}</div>
-    <div class="pkt-cell time">${pkt.time}</div>
-    <div class="pkt-cell src">${pkt.src}</div>
-    <div class="pkt-cell dst" style="color:#a78bfa;font-size:10px">${pkt.dst}</div>
-    <div class="pkt-cell proto">${pkt.proto}</div>
-    <div class="pkt-cell" style="color:var(--text-dim)">${pkt.method}</div>
-    <div class="pkt-cell" style="color:var(--cyan)">${pkt.packets}</div>
-    <div class="pkt-cell" style="color:${pkt.rate > 50 ? 'var(--red)' : 'var(--text)'}">${typeof pkt.rate==='number'?pkt.rate.toFixed(1):pkt.rate}</div>
-    <div class="pkt-cell" style="font-size:10px">${pkt.info}</div>
-    <div class="pkt-cell">
-      <span class="status-badge sb-${pkt.status === 'blocked' ? 'blocked' : pkt.status === 'attack' ? 'attack' : pkt.status === 'flagged' ? 'flagged' : 'safe'}">
-        ${pkt.action}
-      </span>
+    <div class="td td-num">${pkt.num}</div>
+    <div class="td td-time">${pkt.time}</div>
+    <div class="td td-ip">${pkt.ip}</div>
+    <div class="td td-info">${pkt.reason}</div>
+    <div class="td">
+      <div class="conf-wrap">
+        <div class="conf-track">
+          <div class="conf-fill" style="width:${pkt.conf}%;background:${confColor}"></div>
+        </div>
+        <span class="conf-text">${pkt.conf.toFixed(0)}%</span>
+      </div>
+    </div>
+    <div class="td">
+      <span class="badge ${badgeClass}">${badgeText}</span>
+    </div>
+  `;
+  row.addEventListener('click', () => selectRow(pkt, row));
+  tbody.appendChild(row);
+
+  document.getElementById('sbCount').textContent = `Rows: ${rowNum}`;
+  if (autoScroll) tbody.scrollTop = tbody.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════
+//  SELECT ROW
+// ═══════════════════════════════════════════════
+function selectRow(pkt, el) {
+  document.querySelectorAll('.log-row.selected').forEach(r => r.classList.remove('selected'));
+  el.classList.add('selected');
+
+  const vc = pkt.rowClass === 'row-safe' ? 'dv-green'
+    : pkt.rowClass === 'row-blocked' ? 'dv-red' : 'dv-yellow';
+
+  document.getElementById('detailSection').innerHTML = `
+    <div class="detail-group">
+      <div class="detail-group-title">Request Info</div>
+      <div><span class="detail-key">Row # : </span><span class="detail-val">${pkt.num}</span></div>
+      <div><span class="detail-key">Time  : </span><span class="detail-val">${pkt.time}</span></div>
+      <div><span class="detail-key">Source IP : </span><span class="detail-val ${vc}">${pkt.ip}</span></div>
+      <div><span class="detail-key">Protocol  : </span><span class="detail-val">HTTP/POST</span></div>
+      <div><span class="detail-key">Dest      : </span><span class="detail-val">streamvibef0f1.netlify.app</span></div>
+    </div>
+    <div class="detail-group">
+      <div class="detail-group-title">AI Detection</div>
+      <div><span class="detail-key">ML Model  : </span><span class="detail-val">Random Forest (CICIDS)</span></div>
+      <div><span class="detail-key">Label     : </span><span class="detail-val ${vc}">${pkt.label}</span></div>
+      <div><span class="detail-key">Confidence: </span><span class="detail-val ${vc}">${pkt.conf.toFixed(2)}%</span></div>
+      <div><span class="detail-key">Reason    : </span><span class="detail-val">${pkt.reason}</span></div>
+    </div>
+    <div class="detail-group">
+      <div class="detail-group-title">Action Taken</div>
+      <div><span class="detail-key">Decision  : </span><span class="detail-val ${vc}">${pkt.action}</span></div>
+      ${pkt.action === 'BLOCKED' ? `<div><span class="detail-key">Block type: </span><span class="detail-val dv-red">IP BLACKLISTED — all further requests dropped</span></div>` : ''}
+      ${pkt.action === 'OVERLOAD' ? `<div><span class="detail-key">Note      : </span><span class="detail-val dv-yellow">Protection OFF — traffic passed through (website overloaded)</span></div>` : ''}
     </div>
   `;
 
-  row.addEventListener('click', () => selectPacket(pkt, row));
-  list.appendChild(row);
-
-  document.getElementById('sbCount').textContent = `Packets: ${packetNum}`;
-
-  if (autoScroll) list.scrollTop = list.scrollHeight;
+  updateAI(pkt.conf, pkt.rowClass, pkt.reason);
 }
 
-// ═══════════════════════════════════════════
-//  SELECT PACKET — show detail
-// ═══════════════════════════════════════════
-function selectPacket(pkt, rowEl) {
-  document.querySelectorAll('.pkt-row.selected').forEach(r => r.classList.remove('selected'));
-  rowEl.classList.add('selected');
-  selectedPkt = pkt;
-  document.getElementById('sbSelected').textContent = `Selected: #${pkt.num} — ${pkt.src}`;
+// ═══════════════════════════════════════════════
+//  UPDATE AI PANEL
+// ═══════════════════════════════════════════════
+function updateAI(conf, rowClass, reason) {
+  const attackProb  = rowClass === 'row-safe' ? Math.min(conf, 20) : conf;
+  const benignProb  = 100 - attackProb;
 
-  const conf = parseFloat(pkt.confidence)||0;
-  const statusColor = pkt.status==='safe' ? 'green' : pkt.status==='blocked' ? 'red' : 'yellow';
+  document.getElementById('aiAttackPct').textContent  = attackProb.toFixed(1) + '%';
+  document.getElementById('aiBenignPct').textContent  = benignProb.toFixed(1) + '%';
+  document.getElementById('aiAttackFill').style.width = attackProb + '%';
+  document.getElementById('aiBenignFill').style.width = benignProb + '%';
 
-  document.getElementById('detailBody').innerHTML = `
-    <div class="detail-tree-row"><span class="detail-key">▼ Frame #${pkt.num} — HTTP Request</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Timestamp:   </span><span class="detail-val">${pkt.time}</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Source IP:   </span><span class="detail-val ${statusColor}">${pkt.src}</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Destination: </span><span class="detail-val">${pkt.dst}</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Protocol:    </span><span class="detail-val">${pkt.proto}</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Method:      </span><span class="detail-val">${pkt.method}</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Pkt/s:       </span><span class="detail-val ${pkt.rate>50?'red':''}">${pkt.rate}</span></div>
-    <div style="height:6px"></div>
-    <div class="detail-tree-row"><span class="detail-key">▼ AI Detection Layer</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Model:       </span><span class="detail-val">Hybrid Ensemble (RF+DT+XGBoost)</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Confidence:  </span><span class="detail-val ${statusColor}">${conf.toFixed(2)}%</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Label:       </span><span class="detail-val ${statusColor}">${pkt.status.toUpperCase()}</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Reason:      </span><span class="detail-val">${pkt.info}</span></div>
-    <div style="height:6px"></div>
-    <div class="detail-tree-row"><span class="detail-key">▼ Action Taken</span></div>
-    <div class="detail-tree-row indent"><span class="detail-key">Decision:    </span><span class="detail-val ${statusColor}">${pkt.action}</span></div>
-    ${pkt.status==='blocked' ? `<div class="detail-tree-row indent"><span class="detail-key">Block type:  </span><span class="detail-val red">IP BLACKLISTED — all future traffic dropped</span></div>` : ''}
-  `;
-
-  updateAIPanel(conf, pkt.status, pkt.info, pkt.rate);
-}
-
-// ═══════════════════════════════════════════
-//  AI PANEL UPDATE
-// ═══════════════════════════════════════════
-function updateAIPanel(conf, status, reason, rate) {
-  const attackProb = status === 'safe' ? Math.min(conf, 30) : conf;
-  const benignProb = 100 - attackProb;
-  const rateScore = Math.min(100, (parseFloat(rate)||0) / RATE_LIMIT * 100);
-
-  document.getElementById('aiAttackProb').textContent = attackProb.toFixed(1)+'%';
-  document.getElementById('aiBenignProb').textContent = benignProb.toFixed(1)+'%';
-  document.getElementById('aiRateScore').textContent = rateScore.toFixed(1)+'%';
-
-  document.getElementById('aiAttackFill').style.width = attackProb+'%';
-  document.getElementById('aiBenignFill').style.width = benignProb+'%';
-  document.getElementById('aiRateFill').style.width = rateScore+'%';
-
-  const attackColor = attackProb > 85 ? 'var(--red)' : attackProb > 60 ? 'var(--yellow)' : 'var(--green)';
-  document.getElementById('aiAttackFill').style.background = attackColor;
+  const atkColor = attackProb > 80 ? 'var(--red)' : attackProb > 50 ? 'var(--yellow)' : 'var(--green)';
+  document.getElementById('aiAttackFill').style.background = atkColor;
 
   const verdict = document.getElementById('aiVerdict');
-  verdict.className = 'ai-verdict ' + (status==='blocked' ? 'attack' : status==='flagged' ? 'flagged' : status==='safe' ? 'safe' : 'idle');
-  verdict.textContent = status === 'blocked' ? '🚫 BLOCKED — DDOS ATTACK'
-    : status === 'flagged' ? '⚠ FLAGGED — SUSPICIOUS'
-    : status === 'safe'   ? '✓ ALLOWED — BENIGN'
-    : 'AWAITING TRAFFIC';
+  if (rowClass === 'row-blocked') {
+    verdict.className = 'ai-verdict-box blocked';
+    verdict.textContent = '🚫 BLOCKED — DDoS Attack';
+  } else if (rowClass === 'row-flagged' || rowClass === 'row-attack') {
+    verdict.className = 'ai-verdict-box flagged';
+    verdict.textContent = '⚠ FLAGGED — Suspicious';
+  } else if (rowClass === 'row-safe') {
+    verdict.className = 'ai-verdict-box safe';
+    verdict.textContent = '✓ ALLOWED — Benign';
+  } else if (rowClass === 'row-overload') {
+    verdict.className = 'ai-verdict-box flagged';
+    verdict.textContent = '⚠ OVERLOAD — Protection OFF';
+  }
 
-  document.getElementById('aiReason').innerHTML = `
-    Model: Random Forest (sklearn) — CICIDS2017 dataset<br>
-    Threshold: 0.85 to auto-block<br>
-    Reason: <b style="color:var(--cyan)">${reason||'—'}</b>
-  `;
-
-  document.getElementById('sConfidence').textContent = conf.toFixed(1)+'%';
-  document.getElementById('sConfidence').style.color = status==='safe' ? 'var(--green)' : status==='blocked' ? 'var(--red)' : 'var(--yellow)';
+  document.getElementById('aiReason').innerHTML =
+    `Model: <b>Random Forest</b> (trained on CICIDS dataset)<br>Reason: <b>${reason || '—'}</b>`;
 }
 
-// ═══════════════════════════════════════════
-//  BLOCKED IPs PANEL
-// ═══════════════════════════════════════════
-async function fetchBlockedIPs() {
+// ═══════════════════════════════════════════════
+//  BLOCKED IPs
+// ═══════════════════════════════════════════════
+async function fetchBlocked() {
   try {
-    const r = await fetch(`${API_BASE}/api/blocked`);
-    const d = await r.json();
+    const res = await fetch(`${API_BASE}/api/blocked`);
+    const d   = await res.json();
     const ips = d.blocked_ips || [];
-    ips.forEach(ip => blockedIPs.add(ip));
-    updateBlockedPanel();
-  } catch(e) {}
+    ips.forEach(ip => blockedSet.add(ip));
+    renderBlockedList();
+  } catch (e) {}
 }
 
-function updateBlockedPanel() {
-  const list = document.getElementById('blockedList');
-  const count = blockedIPs.size;
-  document.getElementById('blockedCount').textContent = count;
+function renderBlockedList() {
+  const el = document.getElementById('blockedList');
+  document.getElementById('blockedCount').textContent = blockedSet.size;
 
-  if (count === 0) {
-    list.innerHTML = '<div style="color:var(--text-dim);font-size:10px;padding:8px 12px;font-style:italic">No IPs blocked yet</div>';
+  if (blockedSet.size === 0) {
+    el.innerHTML = '<div class="empty-msg">No IPs blocked yet</div>';
     return;
   }
-  list.innerHTML = '';
-  [...blockedIPs].slice(-20).reverse().forEach(ip => {
+
+  el.innerHTML = '';
+  [...blockedSet].slice(-10).reverse().forEach(ip => {
     const row = document.createElement('div');
     row.className = 'blocked-ip-row';
     row.innerHTML = `
       <span class="blocked-ip-addr">${ip}</span>
-      <button class="unblock-btn" onclick="unblockIP('${ip}')">unblock</button>
+      <button class="unblock-btn" onclick="unblockIP('${ip}')">Unblock</button>
     `;
-    list.appendChild(row);
+    el.appendChild(row);
   });
 }
 
 async function unblockIP(ip) {
   try {
     await fetch(`${API_BASE}/api/unblock`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ip})
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip })
     });
-    blockedIPs.delete(ip);
-    updateBlockedPanel();
-  } catch(e) {
-    blockedIPs.delete(ip);
-    updateBlockedPanel();
-  }
+  } catch (e) {}
+  blockedSet.delete(ip);
+  renderBlockedList();
 }
 
-// ═══════════════════════════════════════════
-//  ATTACK ALERT
-// ═══════════════════════════════════════════
-function showAttackAlert(ip, conf) {
-  document.getElementById('alertIp').textContent = ip;
-  document.getElementById('alertConf').textContent = parseFloat(conf).toFixed(1) + '%';
-  const alert = document.getElementById('attackAlert');
-  alert.classList.add('show');
-  if (alertDismissTimer) clearTimeout(alertDismissTimer);
-  alertDismissTimer = setTimeout(dismissAlert, 6000);
-
-  // Flash attack indicator
-  document.getElementById('attackIndicator').style.display = 'flex';
-  document.getElementById('captureDot').classList.add('red');
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+function showToast(ip, conf, action) {
+  document.getElementById('toastIp').textContent     = ip;
+  document.getElementById('toastConf').textContent   = parseFloat(conf).toFixed(1) + '%';
+  document.getElementById('toastAction').textContent = action;
+  document.getElementById('toast').classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 6000);
 }
 
-function dismissAlert() {
-  document.getElementById('attackAlert').classList.remove('show');
+function hideToast() {
+  document.getElementById('toast').classList.remove('show');
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  TOOLBAR ACTIONS
-// ═══════════════════════════════════════════
-function toggleCapture() {
-  capturing = !capturing;
-  const btn = document.getElementById('captureBtn');
-  const dot = document.getElementById('captureDot');
-  if (capturing) {
-    btn.textContent = '■ Stop'; btn.classList.add('active');
-    dot.style.background = 'var(--green)'; dot.style.boxShadow = '0 0 8px var(--green)';
-    document.getElementById('captureStatus').textContent = 'CAPTURING';
-    startPolling();
-  } else {
-    btn.textContent = '▶ Start'; btn.classList.remove('active');
-    dot.style.background = 'var(--gray)'; dot.style.boxShadow = 'none';
-    document.getElementById('captureStatus').textContent = 'STOPPED';
-    stopPolling();
-  }
-}
-
-function clearPackets() {
-  packets = []; packetNum = 0;
-  knownTimestamps.clear();
-  document.getElementById('pktList').innerHTML = '';
-  document.getElementById('sbCount').textContent = 'Packets: 0';
-  document.getElementById('detailBody').innerHTML = '<div style="color:var(--text-dim);font-style:italic;font-size:11px">Select a packet row to inspect details...</div>';
+// ═══════════════════════════════════════════════
+function clearLogs() {
+  allRows    = [];
+  rowNum     = 0;
+  seenKeys.clear();
+  const tb = document.getElementById('tableBody');
+  tb.innerHTML = '<div data-empty style="padding:20px; color:var(--text-muted); text-align:center; margin-top:40px; font-size:13px;">Logs cleared. Waiting for new traffic...</div>';
+  document.getElementById('sbCount').textContent = 'Rows: 0';
 }
 
 function toggleAutoScroll() {
   autoScroll = !autoScroll;
   const btn = document.getElementById('autoScrollBtn');
-  btn.classList.toggle('active', autoScroll);
-  btn.textContent = autoScroll ? '↓ AUTO' : '↓ OFF';
+  btn.classList.toggle('btn-green', autoScroll);
+  btn.textContent = autoScroll ? '↓ Auto: ON' : '↓ Auto: OFF';
 }
 
 function applyFilter() {
-  filterText = document.getElementById('filterInput').value;
-  document.getElementById('sbFilter').textContent = filterText ? `Filter: "${filterText}"` : 'No filter applied';
-  reRenderTable();
+  filterText = document.getElementById('filterInput').value.trim().toLowerCase();
+  document.getElementById('sbFilter').textContent = filterText ? `Filter: "${filterText}"` : 'No filter';
+  rerender();
 }
 
-function matchesFilter(pkt, f) {
-  if (!f) return true;
-  const s = `${pkt.src} ${pkt.dst} ${pkt.status} ${pkt.action} ${pkt.info} ${pkt.proto}`.toLowerCase();
-  // Support simple expressions like "confidence > 80", "status == attack"
-  if (f.includes('>') || f.includes('<') || f.includes('==')) {
-    if (f.includes('confidence')) {
-      const n = parseFloat(f.replace(/[^0-9.]/g,''));
-      if (f.includes('>')) return parseFloat(pkt.confidence) > n;
-      if (f.includes('<')) return parseFloat(pkt.confidence) < n;
-    }
-    if (f.includes('status')) {
-      const val = f.split('==')[1]?.trim().replace(/['"]/g,'');
-      if (val) return pkt.status === val;
-    }
-  }
-  return s.includes(f);
+function rowMatches(pkt, f) {
+  const str = `${pkt.ip} ${pkt.action} ${pkt.label} ${pkt.reason}`.toLowerCase();
+  return str.includes(f);
 }
 
-function reRenderTable() {
-  const list = document.getElementById('pktList');
-  list.innerHTML = '';
-  const fText = filterText.toLowerCase().trim();
-  packets.forEach(pkt => {
-    if (!fText || matchesFilter(pkt, fText)) {
-      // Re-add row (simplified, just call addPacketRow logic)
-      addRowToDOM(pkt);
-    }
+function rerender() {
+  const tb = document.getElementById('tableBody');
+  tb.innerHTML = '';
+  allRows.forEach(pkt => {
+    if (!filterText || rowMatches(pkt, filterText)) renderRow(pkt);
   });
 }
 
-function addRowToDOM(pkt) {
-  const list = document.getElementById('pktList');
-  const row = document.createElement('div');
-  row.className = `pkt-row ${pkt.status}`;
-  row.innerHTML = `
-    <div class="pkt-cell num">${pkt.num}</div>
-    <div class="pkt-cell time">${pkt.time}</div>
-    <div class="pkt-cell src">${pkt.src}</div>
-    <div class="pkt-cell dst" style="color:#a78bfa;font-size:10px">${pkt.dst}</div>
-    <div class="pkt-cell proto">${pkt.proto}</div>
-    <div class="pkt-cell" style="color:var(--text-dim)">${pkt.method}</div>
-    <div class="pkt-cell" style="color:var(--cyan)">${pkt.packets}</div>
-    <div class="pkt-cell" style="color:${pkt.rate>50?'var(--red)':'var(--text)'}">${typeof pkt.rate==='number'?pkt.rate.toFixed(1):pkt.rate}</div>
-    <div class="pkt-cell" style="font-size:10px">${pkt.info}</div>
-    <div class="pkt-cell"><span class="status-badge sb-${pkt.status==='blocked'?'blocked':pkt.status==='attack'?'attack':pkt.status==='flagged'?'flagged':'safe'}">${pkt.action}</span></div>
-  `;
-  row.addEventListener('click', () => selectPacket(pkt, row));
-  list.appendChild(row);
-}
-
 function exportLogs() {
-  const data = JSON.stringify(packets, null, 2);
-  const blob = new Blob([data], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `ddos_capture_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+  const blob = new Blob([JSON.stringify(allRows, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `ddos_logs_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
   a.click();
 }
 
 async function blockAllAttackers() {
-  const attackPkts = packets.filter(p => p.status !== 'safe');
-  const uniqueIPs = [...new Set(attackPkts.map(p => p.src))];
-  if (uniqueIPs.length === 0) return;
-  for (const ip of uniqueIPs) {
-    blockedIPs.add(ip);
-    // Flood /log for this IP so app.py crosses BLOCK_THRESHOLD server-side
+  const attackIPs = [...new Set(allRows.filter(p => p.label === 'DDoS').map(p => p.ip))];
+  if (attackIPs.length === 0) { alert('No attackers detected yet.'); return; }
+
+  for (const ip of attackIPs) {
+    blockedSet.add(ip);
     for (let i = 0; i < 35; i++) {
       try {
         await fetch(`${API_BASE}/log`, {
           method: 'POST',
-          headers: { 'X-Forwarded-For': ip }
+          headers: { 'X-Forwarded-For': ip, 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
         });
-      } catch(e) {}
+      } catch (e) {}
     }
   }
-  updateBlockedPanel();
-  await fetchBlockedIPs();
+  renderBlockedList();
+  await fetchBlocked();
 }
 
-// ═══════════════════════════════════════════
-//  POLLING
-// ═══════════════════════════════════════════
-function startPolling() {
-  fetchStats();
-  pollTimer = setInterval(fetchStats, POLL_INTERVAL);
+async function resetAll() {
+  if (!confirm('Reset all data (logs, blocked IPs, stats)?')) return;
+  try {
+    await fetch(`${API_BASE}/api/reset`, { method: 'POST' });
+  } catch (e) {}
+  clearLogs();
+  blockedSet.clear();
+  renderBlockedList();
+  seenKeys.clear();
+  lastTotal  = 0;
+  prevBenign = 0;
+  prevAttack = 0;
+  sparkData  = { safe: new Array(40).fill(0), attack: new Array(40).fill(0) };
+  ['sTotal','sAttacks','sBlocked','sBenign','sReqMin'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
 }
 
-function stopPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-}
-
-// ═══════════════════════════════════════════
-//  HELPERS
-// ═══════════════════════════════════════════
-function timeNow() {
-  return new Date().toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
-}
-
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  AUTO BLOCK TOGGLE
-// ═══════════════════════════════════════════
-let autoBlock = true;
+// ═══════════════════════════════════════════════
+function setAutoBlockUI(on) {
+  const tog = document.getElementById('autoBlockToggle');
+  const lbl = document.getElementById('autoBlockLabel');
+  tog.className  = `autoblock-toggle ${on ? 'on' : 'off'}`;
+  lbl.textContent = `AUTO BLOCK: ${on ? 'ON' : 'OFF'}`;
+}
 
 async function toggleAutoBlock() {
   autoBlock = !autoBlock;
-  const btn = document.getElementById('autoBlockBtn');
-  btn.textContent = `⚡ AUTO BLOCK: ${autoBlock ? 'ON' : 'OFF'}`;
-  if (autoBlock) {
-    btn.classList.add('active');
-    btn.classList.remove('danger');
-  } else {
-    btn.classList.remove('active');
-    btn.classList.add('danger');
-  }
+  setAutoBlockUI(autoBlock);
   try {
     await fetch(`${API_BASE}/api/toggle_block`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({status: autoBlock})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: autoBlock })
     });
-  } catch(e) {
-    // API offline — state is still reflected in UI
-  }
+  } catch (e) {}
 }
 
-// ═══════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════
-startPolling();
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+function timeNow() {
+  return new Date().toLocaleTimeString('en-GB', { hour12: false });
+}
+
+// ═══════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════
+fetchStats();
+pollTimer = setInterval(fetchStats, POLL_MS);
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.key==='f') { e.preventDefault(); document.getElementById('filterInput').focus(); }
-  if (e.key==='Escape') { document.getElementById('filterInput').value=''; applyFilter(); }
-  if (e.ctrlKey && e.key==='e') { e.preventDefault(); exportLogs(); }
+  if (e.ctrlKey && e.key === 'f') { e.preventDefault(); document.getElementById('filterInput').focus(); }
+  if (e.key === 'Escape')         { document.getElementById('filterInput').value = ''; applyFilter(); }
 });
 </script>
 </body>
